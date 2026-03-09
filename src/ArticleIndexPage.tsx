@@ -38,11 +38,15 @@ export default function ArticleIndexPage() {
   };
 
   useEffect(() => {
-    fetch('/api/public/data').then(res => res.json()).then(data => {
-      setSettings(data.settings);
-      // Extract unique categories from all articles if possible, but we'll just use a fixed list or fetch them
-      // For now, let's assume we can get them from the first fetch or a separate endpoint
-    });
+    fetch('/api/public/data')
+      .then(res => res.ok ? res.json() : {})
+      .then(data => {
+        const d = data as any;
+        if (d && Array.isArray(d.settings)) {
+          setSettings(d.settings);
+        }
+      })
+      .catch(err => console.error("Failed to fetch public data:", err));
   }, []);
 
   useEffect(() => {

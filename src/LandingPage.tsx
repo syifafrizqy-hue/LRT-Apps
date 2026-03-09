@@ -674,12 +674,22 @@ export default function LandingPage() {
 
   useEffect(() => {
     fetch('/api/public/data')
-      .then(res => res.json())
-      .then(setData);
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && Array.isArray(data.settings)) {
+          setData(data);
+        } else {
+          setData(null);
+        }
+      })
+      .catch(err => {
+        console.error("Failed to fetch public data:", err);
+        setData(null);
+      });
   }, []);
 
   useEffect(() => {
-    if (data) {
+    if (data && Array.isArray(data.settings)) {
       const getSetting = (key: string) => data.settings.find(s => s.key === key)?.value;
       
       // SEO Implementation
@@ -755,7 +765,7 @@ export default function LandingPage() {
     </div>
   );
 
-  const getSetting = (key: string) => data.settings.find(s => s.key === key)?.value;
+  const getSetting = (key: string) => Array.isArray(data?.settings) ? data.settings.find(s => s.key === key)?.value : undefined;
 
   return (
     <div className="min-h-screen bg-white selection:bg-orange-100 selection:text-orange-600">

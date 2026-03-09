@@ -16,8 +16,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     fetch('/api/public/data')
-      .then(res => res.json())
-      .then(data => setSettings(data.settings || []));
+      .then(res => res.ok ? res.json() : {})
+      .then(data => {
+        const d = data as any;
+        if (d && Array.isArray(d.settings)) {
+          setSettings(d.settings);
+        }
+      })
+      .catch(err => console.error("Failed to fetch public data:", err));
   }, []);
 
   const getSetting = (key: string) => settings.find(s => s.key === key)?.value;

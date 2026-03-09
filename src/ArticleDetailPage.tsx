@@ -24,7 +24,9 @@ export default function ArticleDetailPage() {
 
         const resData = await fetch('/api/public/data');
         const dataPublic = await resData.json();
-        setSettings(dataPublic.settings);
+        if (dataPublic && Array.isArray(dataPublic.settings)) {
+          setSettings(dataPublic.settings);
+        }
 
         // SEO Implementation
         if (data.article) {

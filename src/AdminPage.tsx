@@ -51,7 +51,16 @@ const AdminLayout = ({ children, onLogout }: { children: React.ReactNode, onLogo
   const [siteSettings, setSiteSettings] = useState<Setting[]>([]);
 
   useEffect(() => {
-    fetch('/api/admin/settings').then(res => res.json()).then(setSiteSettings);
+    fetch('/api/admin/settings')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) {
+          setSiteSettings(data);
+        } else {
+          setSiteSettings([]);
+        }
+      })
+      .catch(() => setSiteSettings([]));
   }, []);
 
   const getSetting = (key: string) => siteSettings.find(s => s.key === key)?.value;
@@ -233,6 +242,51 @@ const AdminLayout = ({ children, onLogout }: { children: React.ReactNode, onLogo
   );
 };
 
+// --- Components ---
+
+const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="text-xl font-black text-gray-900">{title}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ImagePreview = ({ url, label }: { url: string, label: string }) => {
+  return (
+    <div className="space-y-2">
+      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</label>
+      <div className="aspect-video rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 overflow-hidden flex items-center justify-center relative group">
+        {url ? (
+          <>
+            <img src={url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span className="text-white text-xs font-bold">Preview Gambar</span>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-2 text-gray-300">
+            <ImageIcon size={40} />
+            <span className="text-xs font-bold">Belum ada gambar</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // --- Modules ---
 
 const DashboardModule = () => {
@@ -396,6 +450,9 @@ const DashboardModule = () => {
 
 const BookingsModule = () => {
   const [items, setItems] = useState<Booking[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<Booking | null>(null);
+
   const fetchItems = () => fetch('/api/admin/bookings').then(res => res.json()).then(setItems);
   useEffect(() => { fetchItems(); }, []);
 
@@ -407,6 +464,11 @@ const BookingsModule = () => {
     });
     fetchItems();
     Swal.fire({ title: 'Status Diperbarui!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+  };
+
+  const handleOpenModal = (item: Booking) => {
+    setSelectedItem(item);
+    setIsModalOpen(true);
   };
 
   const handleDelete = (id: number) => {
@@ -433,7 +495,7 @@ const BookingsModule = () => {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {items.map(item => (
-              <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+              <tr key={item.id} className="hover:bg-gray-50 transition-colors group">
                 <td className="py-6 px-4">
                   <div className="font-bold text-gray-900">{item.name}</div>
                   <div className="text-xs text-gray-400 font-bold mt-1">{item.phone}</div>
@@ -465,43 +527,123 @@ const BookingsModule = () => {
                   </select>
                 </td>
                 <td className="py-6 px-4 text-right">
-                  <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18} /></button>
+                  <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => handleOpenModal(item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"><Edit size={18} /></button>
+                    <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18} /></button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Detail Pesanan">
+        {selectedItem && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Pelanggan</label>
+                  <p className="font-bold text-gray-900">{selectedItem.name}</p>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nomor WhatsApp</label>
+                  <p className="font-bold text-gray-900">{selectedItem.phone}</p>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</label>
+                  <p className="font-bold text-gray-900">{selectedItem.email || '-'}</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Armada Dipesan</label>
+                  <p className="font-bold text-orange-600">{selectedItem.fleet_name}</p>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tanggal Sewa</label>
+                  <p className="font-bold text-gray-900">{new Date(selectedItem.date).toLocaleDateString('id-ID', { dateStyle: 'full' })}</p>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Status Saat Ini</label>
+                  <div className="mt-1">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                      selectedItem.status === 'Pending' ? 'bg-orange-100 text-orange-600' :
+                      selectedItem.status === 'Confirmed' ? 'bg-blue-100 text-blue-600' :
+                      selectedItem.status === 'Completed' ? 'bg-green-100 text-green-600' :
+                      'bg-red-100 text-red-600'
+                    }`}>
+                      {selectedItem.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Catatan Tambahan</label>
+              <p className="text-gray-600 mt-1 bg-gray-50 p-4 rounded-xl border border-gray-100">{selectedItem.notes || 'Tidak ada catatan.'}</p>
+            </div>
+            <div className="pt-4 flex gap-3">
+              <button 
+                onClick={() => handleStatusUpdate(selectedItem.id, 'Confirmed')}
+                className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-blue-700 transition-all"
+              >
+                Konfirmasi Pesanan
+              </button>
+              <button 
+                onClick={() => handleStatusUpdate(selectedItem.id, 'Completed')}
+                className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-green-700 transition-all"
+              >
+                Selesaikan Pesanan
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
 
 const BannersModule = () => {
   const [items, setItems] = useState<Banner[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Banner | null>(null);
+  const [formData, setFormData] = useState<Partial<Banner>>({
+    title: '',
+    subtitle: '',
+    image_url: '',
+    sort_order: 0
+  });
+
   const fetchItems = () => fetch('/api/admin/banners').then(res => res.json()).then(setItems);
   useEffect(() => { fetchItems(); }, []);
 
-  const handleAdd = async () => {
-    const { value: formValues } = await Swal.fire({
-      title: 'Tambah Banner Baru',
-      html:
-        '<input id="swal-input1" class="swal2-input" placeholder="Judul">' +
-        '<input id="swal-input2" class="swal2-input" placeholder="Subjudul">' +
-        '<input id="swal-input3" class="swal2-input" placeholder="URL Gambar">',
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonText: 'Simpan',
-      confirmButtonColor: '#ea580c',
-      preConfirm: () => ({
-        title: (document.getElementById('swal-input1') as HTMLInputElement).value,
-        subtitle: (document.getElementById('swal-input2') as HTMLInputElement).value,
-        image_url: (document.getElementById('swal-input3') as HTMLInputElement).value,
-      })
-    });
-    if (formValues) {
-      await fetch('/api/admin/banners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formValues) });
-      fetchItems();
+  const handleOpenModal = (item?: Banner) => {
+    if (item) {
+      setEditingItem(item);
+      setFormData(item);
+    } else {
+      setEditingItem(null);
+      setFormData({ title: '', subtitle: '', image_url: '', sort_order: 0 });
     }
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const method = editingItem ? 'PUT' : 'POST';
+    const url = editingItem ? `/api/admin/banners/${editingItem.id}` : '/api/admin/banners';
+    
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData)
+    });
+    
+    setIsModalOpen(false);
+    fetchItems();
+    Swal.fire({ title: editingItem ? 'Banner Diperbarui!' : 'Banner Ditambahkan!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
   };
 
   const handleDelete = (id: number) => {
@@ -514,16 +656,17 @@ const BannersModule = () => {
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-xl font-bold">Daftar Banner</h3>
-        <button onClick={handleAdd} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-orange-700 transition-all">
+        <button onClick={() => handleOpenModal()} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-orange-700 transition-all shadow-lg shadow-orange-600/20">
           <Plus size={20} /> Tambah Banner
         </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {items.map(item => (
-          <div key={item.id} className="border border-gray-200 rounded-2xl overflow-hidden group">
+          <div key={item.id} className="border border-gray-200 rounded-2xl overflow-hidden group relative">
             <div className="h-48 relative">
               <img src={item.image_url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                <button onClick={() => handleOpenModal(item)} className="p-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-all"><Edit size={20} /></button>
                 <button onClick={() => handleDelete(item.id)} className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition-all"><Trash2 size={20} /></button>
               </div>
             </div>
@@ -534,47 +677,108 @@ const BannersModule = () => {
           </div>
         ))}
       </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? 'Edit Banner' : 'Tambah Banner Baru'}>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Judul Banner</label>
+            <input 
+              type="text" 
+              required
+              value={formData.title}
+              onChange={e => setFormData({...formData, title: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subjudul</label>
+            <input 
+              type="text" 
+              value={formData.subtitle}
+              onChange={e => setFormData({...formData, subtitle: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">URL Gambar</label>
+            <input 
+              type="text" 
+              required
+              value={formData.image_url}
+              onChange={e => setFormData({...formData, image_url: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+            />
+          </div>
+          <ImagePreview url={formData.image_url || ''} label="Preview Banner" />
+          
+          <div className="flex gap-3 pt-4">
+            <button type="submit" className="flex-1 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all">
+              {editingItem ? 'Simpan Perubahan' : 'Tambah Banner'}
+            </button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-all">
+              Batal
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
 
 const FleetModule = () => {
   const [items, setItems] = useState<Fleet[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Fleet | null>(null);
+  const [formData, setFormData] = useState<Partial<Fleet>>({
+    name: '',
+    type: 'Hiace',
+    price: '',
+    price_numeric: 0,
+    capacity: 0,
+    description: '',
+    image_url: ''
+  });
+
   const fetchItems = () => fetch('/api/admin/fleet').then(res => res.json()).then(setItems);
   useEffect(() => { fetchItems(); }, []);
 
-  const handleAdd = async () => {
-    const { value: formValues } = await Swal.fire({
-      title: 'Tambah Armada',
-      html:
-        '<input id="f-name" class="swal2-input" placeholder="Nama Armada">' +
-        '<input id="f-type" class="swal2-input" placeholder="Tipe (Mobil/Hiace/Mini Bus/Bus)">' +
-        '<input id="f-price" class="swal2-input" placeholder="Harga Tampilan (Rp 1.500.000)">' +
-        '<input id="f-price-num" type="number" class="swal2-input" placeholder="Harga Angka (1500000)">' +
-        '<input id="f-cap" type="number" class="swal2-input" placeholder="Kapasitas (Kursi)">' +
-        '<input id="f-img" class="swal2-input" placeholder="URL Gambar">' +
-        '<textarea id="f-desc" class="swal2-textarea" placeholder="Deskripsi"></textarea>',
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonColor: '#ea580c',
-      preConfirm: () => ({
-        name: (document.getElementById('f-name') as HTMLInputElement).value,
-        type: (document.getElementById('f-type') as HTMLInputElement).value,
-        price: (document.getElementById('f-price') as HTMLInputElement).value,
-        price_numeric: parseInt((document.getElementById('f-price-num') as HTMLInputElement).value),
-        capacity: parseInt((document.getElementById('f-cap') as HTMLInputElement).value),
-        image_url: (document.getElementById('f-img') as HTMLInputElement).value,
-        description: (document.getElementById('f-desc') as HTMLTextAreaElement).value,
-      })
-    });
-    if (formValues) {
-      await fetch('/api/admin/fleet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formValues) });
-      fetchItems();
+  const handleOpenModal = (item?: Fleet) => {
+    if (item) {
+      setEditingItem(item);
+      setFormData(item);
+    } else {
+      setEditingItem(null);
+      setFormData({
+        name: '',
+        type: 'Hiace',
+        price: '',
+        price_numeric: 0,
+        capacity: 0,
+        description: '',
+        image_url: ''
+      });
     }
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const method = editingItem ? 'PUT' : 'POST';
+    const url = editingItem ? `/api/admin/fleet/${editingItem.id}` : '/api/admin/fleet';
+    
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData)
+    });
+    
+    setIsModalOpen(false);
+    fetchItems();
+    Swal.fire({ title: editingItem ? 'Armada Diperbarui!' : 'Armada Ditambahkan!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
   };
 
   const handleDelete = (id: number) => {
-    Swal.fire({ title: 'Hapus?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444' }).then(async (r) => {
+    Swal.fire({ title: 'Hapus Armada?', text: 'Data yang dihapus tidak bisa dikembalikan!', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444' }).then(async (r) => {
       if (r.isConfirmed) { await fetch(`/api/admin/fleet/${id}`, { method: 'DELETE' }); fetchItems(); }
     });
   };
@@ -583,12 +787,15 @@ const FleetModule = () => {
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-xl font-bold">Manajemen Armada</h3>
-        <button onClick={handleAdd} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2"><Plus size={20} /> Tambah Armada</button>
+        <button onClick={() => handleOpenModal()} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-orange-700 transition-all shadow-lg shadow-orange-600/20">
+          <Plus size={20} /> Tambah Armada
+        </button>
       </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead>
-            <tr className="border-b border-gray-100 text-gray-400 text-sm uppercase tracking-wider font-bold">
+            <tr className="border-b border-gray-100 text-gray-400 text-xs uppercase tracking-widest font-black">
               <th className="pb-4 px-4">Armada</th>
               <th className="pb-4 px-4">Tipe</th>
               <th className="pb-4 px-4">Kapasitas</th>
@@ -598,114 +805,320 @@ const FleetModule = () => {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {items.map(item => (
-              <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+              <tr key={item.id} className="hover:bg-gray-50 transition-colors group">
                 <td className="py-4 px-4">
                   <div className="flex items-center gap-4">
-                    <img src={item.image_url} className="w-12 h-12 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                    <div className="w-14 h-10 rounded-lg overflow-hidden border border-gray-100">
+                      <img src={item.image_url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
                     <span className="font-bold text-gray-900">{item.name}</span>
                   </div>
                 </td>
-                <td className="py-4 px-4 font-medium text-gray-600">{item.type}</td>
-                <td className="py-4 px-4 font-medium text-gray-600">{item.capacity} Kursi</td>
-                <td className="py-4 px-4 font-bold text-orange-600">{item.price}</td>
+                <td className="py-4 px-4">
+                  <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-[10px] font-black uppercase tracking-widest">{item.type}</span>
+                </td>
+                <td className="py-4 px-4 text-sm font-bold text-gray-600">{item.capacity} Kursi</td>
+                <td className="py-4 px-4 font-black text-orange-600">{item.price}</td>
                 <td className="py-4 px-4 text-right">
-                  <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18} /></button>
+                  <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => handleOpenModal(item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"><Edit size={18} /></button>
+                    <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18} /></button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? 'Edit Armada' : 'Tambah Armada Baru'}>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Armada</label>
+              <input 
+                type="text" 
+                required
+                value={formData.name}
+                onChange={e => setFormData({...formData, name: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+                placeholder="Contoh: Toyota Hiace Premio"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tipe Kendaraan</label>
+              <select 
+                value={formData.type}
+                onChange={e => setFormData({...formData, type: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+              >
+                <option value="Mobil">Mobil</option>
+                <option value="Hiace">Hiace</option>
+                <option value="Mini Bus">Mini Bus</option>
+                <option value="Bus">Bus</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Harga Tampilan</label>
+              <input 
+                type="text" 
+                required
+                value={formData.price}
+                onChange={e => setFormData({...formData, price: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+                placeholder="Rp 1.500.000"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kapasitas (Kursi)</label>
+              <input 
+                type="number" 
+                required
+                value={formData.capacity}
+                onChange={e => setFormData({...formData, capacity: parseInt(e.target.value)})}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">URL Gambar</label>
+            <input 
+              type="text" 
+              required
+              value={formData.image_url}
+              onChange={e => setFormData({...formData, image_url: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+              placeholder="https://..."
+            />
+          </div>
+
+          <ImagePreview url={formData.image_url || ''} label="Preview Gambar Armada" />
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Deskripsi</label>
+            <textarea 
+              rows={4}
+              value={formData.description}
+              onChange={e => setFormData({...formData, description: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm resize-none"
+              placeholder="Tuliskan fasilitas dan detail armada..."
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button 
+              type="submit"
+              className="flex-1 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all"
+            >
+              {editingItem ? 'Simpan Perubahan' : 'Tambah Armada'}
+            </button>
+            <button 
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="px-8 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-all"
+            >
+              Batal
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
 
 const ArticlesModule = () => {
   const [items, setItems] = useState<Article[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Article | null>(null);
+  const [formData, setFormData] = useState<Partial<Article>>({
+    title: '',
+    category: '',
+    author: 'Admin',
+    image_url: '',
+    description: '',
+    content: ''
+  });
+
   const fetchItems = () => fetch('/api/admin/articles').then(res => res.json()).then(setItems);
   useEffect(() => { fetchItems(); }, []);
 
-  const handleAdd = async () => {
-    const { value: formValues } = await Swal.fire({
-      title: 'Tambah Artikel',
-      html:
-        '<input id="a-title" class="swal2-input" placeholder="Judul Artikel">' +
-        '<input id="a-cat" class="swal2-input" placeholder="Kategori (Tips/Destinasi/dll)">' +
-        '<input id="a-author" class="swal2-input" placeholder="Penulis (Author)">' +
-        '<input id="a-img" class="swal2-input" placeholder="URL Gambar">' +
-        '<textarea id="a-desc" class="swal2-textarea" placeholder="Meta Deskripsi (SEO)"></textarea>' +
-        '<textarea id="a-content" class="swal2-textarea" placeholder="Konten Artikel"></textarea>',
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonColor: '#ea580c',
-      preConfirm: () => ({
-        title: (document.getElementById('a-title') as HTMLInputElement).value,
-        category: (document.getElementById('a-cat') as HTMLInputElement).value,
-        author: (document.getElementById('a-author') as HTMLInputElement).value,
-        image_url: (document.getElementById('a-img') as HTMLInputElement).value,
-        description: (document.getElementById('a-desc') as HTMLTextAreaElement).value,
-        content: (document.getElementById('a-content') as HTMLTextAreaElement).value,
-      })
-    });
-    if (formValues) {
-      await fetch('/api/admin/articles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formValues) });
-      fetchItems();
+  const handleOpenModal = (item?: Article) => {
+    if (item) {
+      setEditingItem(item);
+      setFormData(item);
+    } else {
+      setEditingItem(null);
+      setFormData({ title: '', category: '', author: 'Admin', image_url: '', description: '', content: '' });
     }
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const method = editingItem ? 'PUT' : 'POST';
+    const url = editingItem ? `/api/admin/articles/${editingItem.id}` : '/api/admin/articles';
+    
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData)
+    });
+    
+    setIsModalOpen(false);
+    fetchItems();
+    Swal.fire({ title: editingItem ? 'Artikel Diperbarui!' : 'Artikel Diterbitkan!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+  };
+
+  const handleDelete = (id: number) => {
+    Swal.fire({ title: 'Hapus Artikel?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444' }).then(async (r) => {
+      if (r.isConfirmed) { await fetch(`/api/admin/articles/${id}`, { method: 'DELETE' }); fetchItems(); }
+    });
   };
 
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-xl font-bold">Daftar Artikel</h3>
-        <button onClick={handleAdd} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2"><Plus size={20} /> Tulis Artikel</button>
+        <button onClick={() => handleOpenModal()} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-orange-700 transition-all shadow-lg shadow-orange-600/20">
+          <Plus size={20} /> Tulis Artikel
+        </button>
       </div>
       <div className="space-y-4">
         {items.map(item => (
-          <div key={item.id} className="flex gap-6 p-4 border border-gray-100 rounded-2xl hover:border-orange-200 transition-all">
+          <div key={item.id} className="flex gap-6 p-4 border border-gray-100 rounded-2xl hover:border-orange-200 transition-all group">
             <img src={item.image_url} className="w-32 h-24 rounded-xl object-cover shrink-0" referrerPolicy="no-referrer" />
             <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2 py-0.5 bg-orange-50 text-orange-600 rounded text-[10px] font-black uppercase tracking-widest">{item.category}</span>
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{new Date(item.created_at).toLocaleDateString()}</span>
+              </div>
               <h4 className="font-bold text-lg mb-1">{item.title}</h4>
-              <p className="text-gray-500 text-sm line-clamp-2">{item.content}</p>
-              <p className="text-xs text-gray-400 mt-2 font-bold uppercase tracking-wider">{new Date(item.created_at).toLocaleDateString()}</p>
+              <p className="text-gray-500 text-sm line-clamp-2">{item.description}</p>
             </div>
-            <div className="flex items-center">
-              <button onClick={async () => {
-                await fetch(`/api/admin/articles/${item.id}`, { method: 'DELETE' });
-                fetchItems();
-              }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={18} /></button>
+            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => handleOpenModal(item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"><Edit size={18} /></button>
+              <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18} /></button>
             </div>
           </div>
         ))}
       </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? 'Edit Artikel' : 'Tulis Artikel Baru'}>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Judul Artikel</label>
+              <input 
+                type="text" 
+                required
+                value={formData.title}
+                onChange={e => setFormData({...formData, title: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Kategori</label>
+              <input 
+                type="text" 
+                required
+                value={formData.category}
+                onChange={e => setFormData({...formData, category: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+                placeholder="Tips, Destinasi, Wisata"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">URL Gambar</label>
+            <input 
+              type="text" 
+              required
+              value={formData.image_url}
+              onChange={e => setFormData({...formData, image_url: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+            />
+          </div>
+          <ImagePreview url={formData.image_url || ''} label="Preview Gambar Sampul" />
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Meta Deskripsi (SEO)</label>
+            <textarea 
+              rows={2}
+              value={formData.description}
+              onChange={e => setFormData({...formData, description: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm resize-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Konten Artikel</label>
+            <textarea 
+              rows={8}
+              required
+              value={formData.content}
+              onChange={e => setFormData({...formData, content: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button type="submit" className="flex-1 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all">
+              {editingItem ? 'Simpan Perubahan' : 'Terbitkan Artikel'}
+            </button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-all">
+              Batal
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
 
 const ReviewsModule = () => {
   const [items, setItems] = useState<Review[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Review | null>(null);
+  const [formData, setFormData] = useState<Partial<Review>>({
+    customer_name: '',
+    rating: 5,
+    review_text: '',
+    is_approved: 1
+  });
+
   const fetchItems = () => fetch('/api/admin/reviews').then(res => res.json()).then(setItems);
   useEffect(() => { fetchItems(); }, []);
 
-  const handleAdd = async () => {
-    const { value: formValues } = await Swal.fire({
-      title: 'Tambah Review',
-      html:
-        '<input id="r-name" class="swal2-input" placeholder="Nama Pelanggan">' +
-        '<input id="r-rating" type="number" min="1" max="5" class="swal2-input" placeholder="Rating (1-5)">' +
-        '<textarea id="r-text" class="swal2-textarea" placeholder="Isi Review"></textarea>',
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonColor: '#ea580c',
-      preConfirm: () => ({
-        customer_name: (document.getElementById('r-name') as HTMLInputElement).value,
-        rating: parseInt((document.getElementById('r-rating') as HTMLInputElement).value),
-        review_text: (document.getElementById('r-text') as HTMLTextAreaElement).value,
-      })
-    });
-    if (formValues) {
-      await fetch('/api/admin/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formValues) });
-      fetchItems();
+  const handleOpenModal = (item?: Review) => {
+    if (item) {
+      setEditingItem(item);
+      setFormData(item);
+    } else {
+      setEditingItem(null);
+      setFormData({ customer_name: '', rating: 5, review_text: '', is_approved: 1 });
     }
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const method = editingItem ? 'PUT' : 'POST';
+    const url = editingItem ? `/api/admin/reviews/${editingItem.id}` : '/api/admin/reviews';
+    
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData)
+    });
+    
+    setIsModalOpen(false);
+    fetchItems();
+    Swal.fire({ title: editingItem ? 'Review Diperbarui!' : 'Review Ditambahkan!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
   };
 
   const toggleApproval = async (item: Review) => {
@@ -717,15 +1130,23 @@ const ReviewsModule = () => {
     fetchItems();
   };
 
+  const handleDelete = (id: number) => {
+    Swal.fire({ title: 'Hapus Review?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444' }).then(async (r) => {
+      if (r.isConfirmed) { await fetch(`/api/admin/reviews/${id}`, { method: 'DELETE' }); fetchItems(); }
+    });
+  };
+
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-xl font-bold">Testimoni Pelanggan</h3>
-        <button onClick={handleAdd} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2"><Plus size={20} /> Tambah Review</button>
+        <button onClick={() => handleOpenModal()} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-orange-700 transition-all shadow-lg shadow-orange-600/20">
+          <Plus size={20} /> Tambah Review
+        </button>
       </div>
       <div className="grid gap-6">
         {items.map(item => (
-          <div key={item.id} className="p-6 border border-gray-100 rounded-2xl flex justify-between items-start">
+          <div key={item.id} className="p-6 border border-gray-100 rounded-2xl flex justify-between items-start group">
             <div>
               <div className="flex items-center gap-4 mb-2">
                 <h4 className="font-bold text-lg">{item.customer_name}</h4>
@@ -745,172 +1166,378 @@ const ReviewsModule = () => {
               >
                 {item.is_approved === 1 ? 'Approved' : 'Pending'}
               </button>
-              <button onClick={async () => {
-                await fetch(`/api/admin/reviews/${item.id}`, { method: 'DELETE' });
-                fetchItems();
-              }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={18} /></button>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => handleOpenModal(item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"><Edit size={18} /></button>
+                <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18} /></button>
+              </div>
             </div>
           </div>
         ))}
       </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? 'Edit Review' : 'Tambah Review Baru'}>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Pelanggan</label>
+              <input 
+                type="text" 
+                required
+                value={formData.customer_name}
+                onChange={e => setFormData({...formData, customer_name: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Rating (1-5)</label>
+              <input 
+                type="number" 
+                min="1" 
+                max="5"
+                required
+                value={formData.rating}
+                onChange={e => setFormData({...formData, rating: parseInt(e.target.value)})}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Isi Review</label>
+            <textarea 
+              rows={4}
+              required
+              value={formData.review_text}
+              onChange={e => setFormData({...formData, review_text: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button type="submit" className="flex-1 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all">
+              {editingItem ? 'Simpan Perubahan' : 'Tambah Review'}
+            </button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-all">
+              Batal
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
 
 const ClientsModule = () => {
   const [items, setItems] = useState<Client[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Client | null>(null);
+  const [formData, setFormData] = useState<Partial<Client>>({ name: '', logo_url: '' });
+
   const fetchItems = () => fetch('/api/admin/clients').then(res => res.json()).then(setItems);
   useEffect(() => { fetchItems(); }, []);
 
-  const handleAdd = async () => {
-    const { value: formValues } = await Swal.fire({
-      title: 'Tambah Client',
-      html:
-        '<input id="c-name" class="swal2-input" placeholder="Nama Client">' +
-        '<input id="c-logo" class="swal2-input" placeholder="URL Logo">',
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonColor: '#ea580c',
-      preConfirm: () => ({
-        name: (document.getElementById('c-name') as HTMLInputElement).value,
-        logo_url: (document.getElementById('c-logo') as HTMLInputElement).value,
-      })
-    });
-    if (formValues) {
-      await fetch('/api/admin/clients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formValues) });
-      fetchItems();
+  const handleOpenModal = (item?: Client) => {
+    if (item) {
+      setEditingItem(item);
+      setFormData(item);
+    } else {
+      setEditingItem(null);
+      setFormData({ name: '', logo_url: '' });
     }
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const method = editingItem ? 'PUT' : 'POST';
+    const url = editingItem ? `/api/admin/clients/${editingItem.id}` : '/api/admin/clients';
+    
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData)
+    });
+    
+    setIsModalOpen(false);
+    fetchItems();
+    Swal.fire({ title: editingItem ? 'Partner Diperbarui!' : 'Partner Ditambahkan!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+  };
+
+  const handleDelete = (id: number) => {
+    Swal.fire({ title: 'Hapus Partner?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444' }).then(async (r) => {
+      if (r.isConfirmed) { await fetch(`/api/admin/clients/${id}`, { method: 'DELETE' }); fetchItems(); }
+    });
   };
 
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-xl font-bold">Partner & Client</h3>
-        <button onClick={handleAdd} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2"><Plus size={20} /> Tambah Partner</button>
+        <button onClick={() => handleOpenModal()} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-orange-700 transition-all shadow-lg shadow-orange-600/20">
+          <Plus size={20} /> Tambah Partner
+        </button>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
         {items.map(item => (
           <div key={item.id} className="relative group border border-gray-100 rounded-2xl p-6 flex flex-col items-center justify-center gap-4 hover:border-orange-200 transition-all">
             <img src={item.logo_url} className="h-10 grayscale group-hover:grayscale-0 transition-all" referrerPolicy="no-referrer" />
             <span className="text-xs font-bold text-gray-400 text-center">{item.name}</span>
-            <button onClick={async () => {
-              await fetch(`/api/admin/clients/${item.id}`, { method: 'DELETE' });
-              fetchItems();
-            }} className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+            <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => handleOpenModal(item)} className="bg-blue-500 text-white p-1.5 rounded-full shadow-lg"><Edit size={12} /></button>
+              <button onClick={() => handleDelete(item.id)} className="bg-red-500 text-white p-1.5 rounded-full shadow-lg"><Trash2 size={12} /></button>
+            </div>
           </div>
         ))}
       </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? 'Edit Partner' : 'Tambah Partner Baru'}>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nama Partner</label>
+            <input 
+              type="text" 
+              required
+              value={formData.name}
+              onChange={e => setFormData({...formData, name: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">URL Logo</label>
+            <input 
+              type="text" 
+              required
+              value={formData.logo_url}
+              onChange={e => setFormData({...formData, logo_url: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+            />
+          </div>
+          <ImagePreview url={formData.logo_url || ''} label="Preview Logo" />
+          
+          <div className="flex gap-3 pt-4">
+            <button type="submit" className="flex-1 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all">
+              {editingItem ? 'Simpan Perubahan' : 'Tambah Partner'}
+            </button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-all">
+              Batal
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
 
 const AboutModule = () => {
   const [data, setData] = useState<About | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ title: '', content: '', image_url: '' });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formData, setFormData] = useState<Partial<About>>({
+    title: '',
+    content: '',
+    image_url: '',
+    vision: '',
+    mission: ''
+  });
 
-  useEffect(() => {
+  const fetchData = () => {
     fetch('/api/admin/about').then(res => res.json()).then(res => {
       const item = res[0];
       if (item) {
         setData(item);
-        setForm({ title: item.title, content: item.content, image_url: item.image_url });
+        setFormData({ title: item.title, content: item.content, image_url: item.image_url, vision: item.vision, mission: item.mission });
       }
     });
-  }, []);
+  };
 
-  const handleSave = async () => {
+  useEffect(() => { fetchData(); }, []);
+
+  const handleOpenModal = () => {
+    if (data) {
+      setFormData({ title: data.title, content: data.content, image_url: data.image_url, vision: data.vision, mission: data.mission });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     const method = data ? 'PUT' : 'POST';
     const url = data ? `/api/admin/about/${data.id}` : '/api/admin/about';
     await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
+      body: JSON.stringify(formData)
     });
-    Swal.fire('Berhasil!', 'Informasi Tentang Kami telah diperbarui.', 'success');
-    setEditing(false);
-    window.location.reload();
+    Swal.fire({ title: 'Berhasil!', text: 'Informasi Tentang Kami telah diperbarui.', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+    setIsModalOpen(false);
+    fetchData();
   };
 
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-xl font-bold">Profil Perusahaan</h3>
-        {!editing ? (
-          <button onClick={() => setEditing(true)} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2"><Edit size={20} /> Edit Profil</button>
-        ) : (
-          <div className="flex gap-3">
-            <button onClick={() => setEditing(false)} className="bg-gray-200 text-gray-600 px-6 py-2.5 rounded-xl font-bold">Batal</button>
-            <button onClick={handleSave} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2"><Save size={20} /> Simpan</button>
-          </div>
-        )}
+        <button onClick={handleOpenModal} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-orange-700 transition-all shadow-lg shadow-orange-600/20">
+          <Edit size={20} /> Edit Profil
+        </button>
       </div>
-      <div className="space-y-6">
-        <div className="grid md:grid-cols-2 gap-8">
-          <div className="space-y-4">
-            <label className="block text-sm font-bold text-gray-400 uppercase">Judul Utama</label>
-            <input 
-              disabled={!editing}
-              className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-600 outline-none disabled:opacity-50"
-              value={form.title}
-              onChange={e => setForm({...form, title: e.target.value})}
-            />
-            <label className="block text-sm font-bold text-gray-400 uppercase">URL Gambar Profil</label>
-            <input 
-              disabled={!editing}
-              className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-600 outline-none disabled:opacity-50"
-              value={form.image_url}
-              onChange={e => setForm({...form, image_url: e.target.value})}
-            />
+      {data ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div className="space-y-8">
+            <div>
+              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Judul Utama</h4>
+              <p className="text-2xl font-black text-gray-900">{data.title}</p>
+            </div>
+            <div>
+              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Deskripsi</h4>
+              <p className="text-gray-600 leading-relaxed">{data.content}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-8">
+              <div>
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Visi</h4>
+                <p className="text-gray-600 text-sm italic">"{data.vision || '-'}"</p>
+              </div>
+              <div>
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Misi</h4>
+                <p className="text-gray-600 text-sm italic">"{data.mission || '-'}"</p>
+              </div>
+            </div>
           </div>
-          <div className="space-y-4">
-            <label className="block text-sm font-bold text-gray-400 uppercase">Konten Deskripsi</label>
-            <textarea 
-              disabled={!editing}
-              rows={6}
-              className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-600 outline-none disabled:opacity-50"
-              value={form.content}
-              onChange={e => setForm({...form, content: e.target.value})}
-            />
+          <div>
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Gambar Profil</h4>
+            <img src={data.image_url} className="w-full h-80 object-cover rounded-3xl shadow-xl" referrerPolicy="no-referrer" />
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+          <p className="text-gray-400 font-bold">Belum ada data profil perusahaan.</p>
+          <button onClick={handleOpenModal} className="mt-4 text-orange-600 font-black uppercase tracking-widest text-xs">Buat Sekarang</button>
+        </div>
+      )}
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Edit Profil Perusahaan">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Judul Utama</label>
+            <input 
+              type="text" 
+              required
+              value={formData.title}
+              onChange={e => setFormData({...formData, title: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">URL Gambar Profil</label>
+            <input 
+              type="text" 
+              required
+              value={formData.image_url}
+              onChange={e => setFormData({...formData, image_url: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+            />
+          </div>
+          <ImagePreview url={formData.image_url || ''} label="Preview Gambar" />
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Konten Deskripsi</label>
+            <textarea 
+              rows={6}
+              required
+              value={formData.content}
+              onChange={e => setFormData({...formData, content: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm resize-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Visi</label>
+              <textarea 
+                rows={3}
+                value={formData.vision}
+                onChange={e => setFormData({...formData, vision: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm resize-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Misi</label>
+              <textarea 
+                rows={3}
+                value={formData.mission}
+                onChange={e => setFormData({...formData, mission: e.target.value})}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm resize-none"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button type="submit" className="flex-1 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all">
+              Simpan Perubahan
+            </button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-all">
+              Batal
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
 
 const UsersModule = () => {
   const [items, setItems] = useState<User[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<User | null>(null);
+  const [formData, setFormData] = useState<Partial<User>>({
+    username: '',
+    full_name: '',
+    role: 'admin',
+    password: ''
+  });
+
   const fetchItems = () => fetch('/api/admin/users').then(res => res.json()).then(setItems);
   useEffect(() => { fetchItems(); }, []);
 
-  const handleAdd = async () => {
-    const { value: formValues } = await Swal.fire({
-      title: 'Tambah User Admin',
-      html:
-        '<input id="u-name" class="swal2-input" placeholder="Username">' +
-        '<input id="u-pass" type="password" class="swal2-input" placeholder="Password">' +
-        '<select id="u-role" class="swal2-input"><option value="admin">Admin</option><option value="superadmin">Super Admin</option></select>',
-      focusConfirm: false,
-      showCancelButton: true,
-      confirmButtonColor: '#ea580c',
-      preConfirm: () => ({
-        username: (document.getElementById('u-name') as HTMLInputElement).value,
-        password: (document.getElementById('u-pass') as HTMLInputElement).value,
-        role: (document.getElementById('u-role') as HTMLSelectElement).value,
-      })
-    });
-    if (formValues) {
-      await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formValues) });
-      fetchItems();
+  const handleOpenModal = (item?: User) => {
+    if (item) {
+      setEditingItem(item);
+      setFormData({ ...item, password: '' });
+    } else {
+      setEditingItem(null);
+      setFormData({ username: '', full_name: '', role: 'admin', password: '' });
     }
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const method = editingItem ? 'PUT' : 'POST';
+    const url = editingItem ? `/api/admin/users/${editingItem.id}` : '/api/admin/users';
+    
+    const payload = { ...formData };
+    if (editingItem && !payload.password) delete payload.password;
+
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    setIsModalOpen(false);
+    fetchItems();
+    Swal.fire({ title: editingItem ? 'User Diperbarui!' : 'User Ditambahkan!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+  };
+
+  const handleDelete = (id: number) => {
+    Swal.fire({ title: 'Hapus User?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444' }).then(async (r) => {
+      if (r.isConfirmed) { await fetch(`/api/admin/users/${id}`, { method: 'DELETE' }); fetchItems(); }
+    });
   };
 
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-xl font-bold">Manajemen User</h3>
-        <button onClick={handleAdd} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2"><UserPlus size={20} /> Tambah User</button>
+        <button onClick={() => handleOpenModal()} className="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-orange-700 transition-all shadow-lg shadow-orange-600/20">
+          <UserPlus size={20} /> Tambah User
+        </button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left">
@@ -923,7 +1550,7 @@ const UsersModule = () => {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {items.map(item => (
-              <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+              <tr key={item.id} className="hover:bg-gray-50 transition-colors group">
                 <td className="py-4 px-4 font-bold text-gray-900">{item.username}</td>
                 <td className="py-4 px-4">
                   <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${item.role === 'superadmin' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
@@ -931,16 +1558,44 @@ const UsersModule = () => {
                   </span>
                 </td>
                 <td className="py-4 px-4 text-right">
-                  <button onClick={async () => {
-                    await fetch(`/api/admin/users/${item.id}`, { method: 'DELETE' });
-                    fetchItems();
-                  }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={18} /></button>
+                  <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => handleOpenModal(item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"><Edit size={18} /></button>
+                    <button onClick={() => handleDelete(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18} /></button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? 'Edit User' : 'Tambah User Baru'}>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Username</label>
+            <input type="text" required value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Role</label>
+            <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm">
+              <option value="admin">Admin</option>
+              <option value="superadmin">Super Admin</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Password {editingItem && '(Kosongkan jika tidak ingin ganti)'}</label>
+            <input type="password" required={!editingItem} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm" />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button type="submit" className="flex-1 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all">
+              {editingItem ? 'Simpan Perubahan' : 'Tambah User'}
+            </button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-all">
+              Batal
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
@@ -948,17 +1603,31 @@ const UsersModule = () => {
 const SettingsModule = () => {
   const [settings, setSettings] = useState<Setting[]>([]);
   const [activeGroup, setActiveGroup] = useState('umum');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Setting | null>(null);
+  const [editValue, setEditValue] = useState('');
 
-  useEffect(() => {
-    fetch('/api/admin/settings').then(res => res.json()).then(setSettings);
-  }, []);
+  const fetchSettings = () => fetch('/api/admin/settings').then(res => res.json()).then(setSettings);
+  useEffect(() => { fetchSettings(); }, []);
 
-  const handleUpdate = async (id: number, value: string) => {
-    await fetch(`/api/admin/settings/${id}`, {
+  const handleOpenEdit = (item: Setting) => {
+    setEditingItem(item);
+    setEditValue(item.value);
+    setIsModalOpen(true);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+
+    await fetch(`/api/admin/settings/${editingItem.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value })
+      body: JSON.stringify({ value: editValue })
     });
+    
+    setIsModalOpen(false);
+    fetchSettings();
     Swal.fire({ title: 'Tersimpan!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
   };
 
@@ -995,33 +1664,65 @@ const SettingsModule = () => {
       <div className="flex-1 p-8">
         <div className="grid gap-8">
           {settings.filter(s => settingGroups[activeGroup].includes(s.key)).map(s => (
-            <div key={s.id} className="space-y-2">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{s.key.replace(/_/g, ' ')}</label>
-              <div className="flex gap-4">
-                {s.key.includes('description') || s.key.includes('keywords') ? (
-                  <textarea 
-                    rows={3}
-                    className="flex-1 px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-orange-600 outline-none font-medium text-gray-700"
-                    defaultValue={s.value}
-                    onBlur={(e) => handleUpdate(s.id, e.target.value)}
-                  />
-                ) : (
-                  <input 
-                    className="flex-1 px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-orange-600 outline-none font-medium text-gray-700"
-                    defaultValue={s.value}
-                    onBlur={(e) => handleUpdate(s.id, e.target.value)}
-                  />
+            <div key={s.id} className="group p-6 border border-gray-100 rounded-2xl hover:border-orange-200 transition-all">
+              <div className="flex justify-between items-start mb-4">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{s.key.replace(/_/g, ' ')}</label>
+                <button onClick={() => handleOpenEdit(s)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
+                  <Edit size={16} />
+                </button>
+              </div>
+              <div className="flex gap-4 items-center">
+                <div className="flex-1 font-bold text-gray-700 truncate">
+                  {s.value || <span className="text-gray-300 italic font-normal">Belum diatur</span>}
+                </div>
+                {(s.key.includes('_url') || s.key.includes('logo_')) && s.value && (
+                  <div className="p-2 bg-gray-50 rounded-xl border border-gray-100">
+                    <img src={s.value} alt="Preview" className="h-8 object-contain" referrerPolicy="no-referrer" />
+                  </div>
                 )}
               </div>
-              {s.key.includes('_url') || s.key.includes('logo_') && s.value && (
-                <div className="mt-2 p-2 bg-gray-100 rounded-xl inline-block">
-                  <img src={s.value} alt="Preview" className="h-10 object-contain" />
-                </div>
-              )}
             </div>
           ))}
         </div>
       </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`Edit ${editingItem?.key.replace(/_/g, ' ')}`}>
+        <form onSubmit={handleUpdate} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nilai Pengaturan</label>
+            {editingItem?.key.includes('description') || editingItem?.key.includes('keywords') || editingItem?.key.includes('address') ? (
+              <textarea 
+                rows={4}
+                required
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm resize-none"
+              />
+            ) : (
+              <input 
+                type="text" 
+                required
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-orange-600 outline-none transition-all font-bold text-sm"
+              />
+            )}
+          </div>
+          
+          {(editingItem?.key.includes('_url') || editingItem?.key.includes('logo_')) && (
+            <ImagePreview url={editValue} label="Preview Gambar/Logo" />
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <button type="submit" className="flex-1 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all">
+              Simpan Perubahan
+            </button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-all">
+              Batal
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
@@ -1034,10 +1735,16 @@ const LoginPage = ({ onLogin }: { onLogin: (user: any) => void }) => {
   const [logo, setLogo] = useState('');
 
   useEffect(() => {
-    fetch('/api/public/data').then(res => res.json()).then(data => {
-      const l = data.settings.find((s: any) => s.key === 'logo_login')?.value;
-      if (l) setLogo(l);
-    });
+    fetch('/api/public/data')
+      .then(res => res.ok ? res.json() : {})
+      .then(data => {
+        const d = data as any;
+        if (d && Array.isArray(d.settings)) {
+          const l = d.settings.find((s: any) => s.key === 'logo_login')?.value;
+          if (l) setLogo(l);
+        }
+      })
+      .catch(err => console.error("Failed to fetch public data:", err));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
